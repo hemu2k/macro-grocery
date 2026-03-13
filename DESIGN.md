@@ -1,9 +1,9 @@
 # Macro-Aware Grocery Generator — Design Document
 
 > **Owner:** Hemanth Gurappagaru
-> **Last updated:** 2026-03-13
+> **Last updated:** 2026-03-13 (Week 3)
 > **Repo:** https://github.com/hemu2k/macro-grocery
-> **Stack:** React · Vite · Tailwind CSS · localStorage (Week 1–2) → backend (Week 3)
+> **Stack:** React · Vite · Tailwind CSS · localStorage · Kimi K2.5 (NVIDIA API)
 
 ---
 
@@ -18,6 +18,10 @@
 8. [Hooks Reference](#8-hooks-reference)
 9. [Utilities Reference](#9-utilities-reference)
 10. [Storage Schema](#10-storage-schema)
+11. [Learning System Design](#11-learning-system-design)
+12. [AI Integration (Week 3)](#12-ai-integration-week-3)
+13. [Roadmap](#13-roadmap)
+14. [Changelog](#14-changelog)
 11. [Learning System Design](#11-learning-system-design)
 12. [Roadmap](#12-roadmap)
 13. [Changelog](#13-changelog)
@@ -180,21 +184,29 @@ macro-grocery/
 │   ├── index.css                      ← Tailwind directives
 │   ├── components/
 │   │   ├── MacroSummary.jsx           ← 4 macro stat cards (cal/protein/carbs/fat)
-│   │   ├── GroceryTable.jsx           ← main editable table + action buttons
+│   │   ├── GroceryTable.jsx           ← main editable table + AI diff highlighting
 │   │   ├── AddItemModal.jsx           ← modal: add custom grocery item
 │   │   ├── ProgressBar.jsx            ← reusable fill bar with color coding
 │   │   ├── InsightsPanel.jsx          ← learned preferences summary card
 │   │   ├── LogPanel.jsx               ← collapsible interaction history feed
-│   │   └── WeeklyResetModal.jsx       ← confirm archive + generate new week
+│   │   ├── WeeklyResetModal.jsx       ← confirm archive + generate new week
+│   │   ├── AICommandBar.jsx           ← natural language input bar (Week 3)
+│   │   ├── AIResponseStream.jsx       ← streaming AI response + accept/undo (Week 3)
+│   │   ├── ThinkingIndicator.jsx      ← animated thinking state with elapsed time (Week 3)
+│   │   └── ApiKeyModal.jsx            ← one-time NVIDIA API key setup (Week 3)
 │   ├── data/
 │   │   ├── foodDatabase.js            ← 15 seed items + WEEKLY_TARGETS
 │   │   └── archiveStore.js            ← read/write weekly snapshots to localStorage
 │   ├── hooks/
-│   │   ├── useGroceryStore.js         ← all state + localStorage sync
-│   │   └── usePreferenceEngine.js     ← reactive preference profile derivation
+│   │   ├── useGroceryStore.js         ← all state + localStorage sync + undo
+│   │   ├── usePreferenceEngine.js     ← reactive preference profile derivation
+│   │   └── useKimiAI.js              ← AI state: thinking, pending result, errors (Week 3)
+│   ├── services/
+│   │   └── kimiService.js             ← Kimi K2.5 API calls, key management (Week 3)
 │   └── utils/
 │       ├── macroCalculator.js         ← macro math + smart list generator
-│       └── preferenceEngine.js        ← learning logic (pure functions)
+│       ├── preferenceEngine.js        ← learning logic (pure functions)
+│       └── promptBuilder.js           ← system + user prompt construction (Week 3)
 ├── tailwind.config.js
 ├── vite.config.js
 ├── package.json
@@ -229,12 +241,21 @@ macro-grocery/
 - [x] WeeklyResetModal — archives current week, generates personalized new list
 - [x] Weekly archive persists under `macro-grocery-archive`
 
-### Week 3 — Claude API Integration 🔜 Planned
-- [ ] Claude API integration for natural language grocery suggestions
-- [ ] "Ask Claude" input: "I want more Indian protein this week"
-- [ ] Claude reads preference profile + current list → returns suggestions
-- [ ] Backend (Express or similar) to proxy Claude API calls
-- [ ] Migrate state from localStorage → server-side persistence
+### Week 3 — Kimi K2.5 AI Integration ✅ Complete
+- [x] `kimiService.js` — streaming + non-streaming API calls, key management
+- [x] `promptBuilder.js` — system prompt with macro targets + preference profile
+- [x] `useKimiAI.js` hook — AI state, intent detection, validation, error handling
+- [x] `ApiKeyModal.jsx` — one-time API key setup with test connection
+- [x] `AICommandBar.jsx` — full-width NL input with cycling placeholder examples
+- [x] `ThinkingIndicator.jsx` — pulsing dot + elapsed seconds (thinking mode aware)
+- [x] `AIResponseStream.jsx` — typewriter change list, macro check, accept/undo
+- [x] Settings panel (gear icon) — key status, model info, data management
+- [x] GroceryTable diff highlighting — green border (new), blue border/cell (qty change)
+- [x] `applyAIRewrite` + `undoAIRewrite` in store — snapshot-based undo
+- [x] All AI rewrites logged as `ai_rewrite` in interactionLog
+- [x] Validation layer — protein floor 1,000g, neverBuy guard, item count check
+- [x] Intent detection — commands rewrite list, questions stream a conversational answer
+- [x] All errors handled gracefully (API key missing, rate limit, invalid JSON, etc.)
 
 ### Week 4 — Export & Polish 🔜 Planned
 - [ ] WhatsApp export (formatted message)
@@ -447,18 +468,69 @@ localStorage.setItem('macro-grocery-v1', JSON.stringify(log))
 
 ---
 
-## 12. Roadmap
+## 12. AI Integration (Week 3)
+
+### Kimi K2.5 API
+- **Endpoint:** `https://integrate.api.nvidia.com/v1/chat/completions`
+- **Model:** `moonshotai/kimi-k2.5`
+- **Thinking mode:** enabled via `chat_template_kwargs: { thinking: true }`
+- **Expected latency:** 10–30s (thinking chain consumes tokens before final answer)
+- **Key storage:** `localStorage` key `kimi-api-key` — never hardcoded
+- **Auth:** Bearer token in `Authorization` header
+
+### Command vs. Question intent detection
+| Trigger | Intent | Behavior |
+|---------|--------|----------|
+| `make`, `add`, `remove`, `more`, `less`, `swap`, `I want`... | `command` | Calls `kimiComplete`, rewrites list as JSON |
+| `why`, `what`, `how`, `explain`, `tell me`... | `question` | Calls `kimiStream`, returns conversational text |
+
+### Prompt design
+- System prompt includes: macro targets, preference profile (neverBuy/alwaysBuy/preferredQty/cuisine), full food database with macro values, strict JSON output format, hard rules
+- User message includes: NL request, current list with macros, weekly totals vs targets
+- Model output: `{ reasoning, items[], weeklyMacros, changes[] }`
+
+### Validation before applying AI response
+| Check | Rejection reason |
+|-------|-----------------|
+| `items` missing or not array | `PARSE_ERROR` |
+| fewer than 8 items | `PARSE_ERROR` |
+| any `neverBuy` item included | `MACRO_VIOLATION` |
+| weekly protein < 1,000g | `MACRO_VIOLATION` |
+
+### AI error codes
+| Code | User message |
+|------|-------------|
+| `API_KEY_MISSING` | Add your NVIDIA API key in settings |
+| `INVALID_API_KEY` | Invalid API key. Check your key in settings |
+| `RATE_LIMITED` | Too many requests. Wait a moment |
+| `INVALID_JSON` | Kimi returned an unexpected response. Try rephrasing |
+| `MACRO_VIOLATION` | Suggestion dropped protein below target — rejected |
+| `PARSE_ERROR` | Couldn't apply the suggested changes |
+
+---
+
+## 13. Roadmap
 
 | Week | Theme | Status |
 |------|-------|--------|
 | 1 | Core app — editable list, macro tracking, localStorage | ✅ Complete |
 | 2 | Learning layer — preference engine, insights, log panel | ✅ Complete |
-| 3 | Claude API — natural language input, backend, DB migration | 🔜 Planned |
+| 3 | Kimi K2.5 AI — NL commands, streaming, accept/undo | ✅ Complete |
 | 4 | Polish — WhatsApp export, trend charts, meal suggestions | 🔜 Planned |
 
 ---
 
-## 13. Changelog
+## 14. Changelog
+
+### 2026-03-13 — Week 3
+- Added `kimiService.js` — streaming + non-streaming Kimi K2.5 API, key CRUD
+- Added `promptBuilder.js` — system prompt (targets + preference profile + food DB) + user message
+- Added `useKimiAI.js` — AI state management, intent detection, JSON validation
+- New components: `AICommandBar`, `AIResponseStream`, `ThinkingIndicator`, `ApiKeyModal`
+- Settings panel (gear icon) — key status, model info, data management
+- Updated `GroceryTable` — AI diff highlighting (green=new row, blue=qty changed)
+- Updated `useGroceryStore` — `applyAIRewrite`, `undoAIRewrite`, snapshot-based undo, `ai_rewrite` log action
+- Updated `App.jsx` — wired all AI components, settings panel, error display
 
 ### 2026-03-13 — Week 2
 - Added `preferenceEngine.js` with full learning logic

@@ -33,26 +33,57 @@ function loadFromStorage() {
 }
 
 function saveToStorage(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // Don't persist previousList — it's undo state only
+  const { previousList: _prev, ...toSave } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
 }
 
 function appendLog(log, entry) {
-  return [...log, { ...entry, timestamp: new Date().toISOString() }].slice(
-    -500
-  );
+  return [...log, { ...entry, timestamp: new Date().toISOString() }].slice(-500);
 }
 
 export function useGroceryStore() {
   const [state, setState] = useState(() => {
     const saved = loadFromStorage();
-    if (saved) return saved;
+    if (saved) return { ...saved, previousList: null };
     const items = generateSmartList(foodDatabase);
-    return { items, interactionLog: [], weekOf: getMonday() };
+    return { items, interactionLog: [], weekOf: getMonday(), previousList: null };
   });
 
   useEffect(() => {
     saveToStorage(state);
   }, [state]);
+
+  // ── Snapshot / undo ──────────────────────────────────────────────────────────
+
+  function undoAIRewrite() {
+    setState((prev) => {
+      if (!prev.previousList) return prev;
+      return { ...prev, items: prev.previousList, previousList: null };
+    });
+  }
+
+  // ── AI rewrite ───────────────────────────────────────────────────────────────
+
+  function applyAIRewrite(newItems, userInput, changes) {
+    setState((prev) => {
+      const log = appendLog(prev.interactionLog, {
+        action: "ai_rewrite",
+        itemId: null,
+        itemName: null,
+        previousValue: userInput,
+        newValue: changes,
+      });
+      return {
+        ...prev,
+        items: newItems,
+        previousList: prev.items,
+        interactionLog: log,
+      };
+    });
+  }
+
+  // ── Standard actions ─────────────────────────────────────────────────────────
 
   function initializeList() {
     setState((prev) => {
@@ -66,7 +97,7 @@ export function useGroceryStore() {
         previousValue: null,
         newValue: items,
       });
-      return { ...prev, items, interactionLog: log };
+      return { ...prev, items, interactionLog: log, previousList: null };
     });
   }
 
@@ -76,7 +107,6 @@ export function useGroceryStore() {
         const totals = calculateWeeklyTotals(prev.items);
         saveWeekToArchive(prev.items, prev.weekOf, totals);
       }
-
       const baseList = generateSmartList(foodDatabase);
       const profile = buildPreferenceProfile(prev.interactionLog);
       const items = applyPreferencesToList(baseList, profile);
@@ -87,13 +117,7 @@ export function useGroceryStore() {
         previousValue: null,
         newValue: items,
       });
-
-      return {
-        ...prev,
-        items,
-        interactionLog: log,
-        weekOf: getMonday(1),
-      };
+      return { ...prev, items, interactionLog: log, weekOf: getMonday(1), previousList: null };
     });
   }
 
@@ -175,22 +199,15 @@ export function useGroceryStore() {
       day: "numeric",
       year: "numeric",
     });
-
     const categories = ["Protein", "Dairy", "Carbs", "Vegetables", "Fats"];
     const lines = [`GROCERY LIST — Week of ${weekDate}`, ""];
-
     categories.forEach((cat) => {
-      const catItems = state.items.filter(
-        (i) => i.category === cat && i.included
-      );
-      if (catItems.length === 0) return;
+      const catItems = state.items.filter((i) => i.category === cat && i.included);
+      if (!catItems.length) return;
       lines.push(cat.toUpperCase());
-      catItems.forEach((i) => {
-        lines.push(`${i.name}: ${i.qty}${i.unit}`);
-      });
+      catItems.forEach((i) => lines.push(`${i.name}: ${i.qty}${i.unit}`));
       lines.push("");
     });
-
     const text = lines.join("\n");
     navigator.clipboard.writeText(text).catch(() => {
       const el = document.createElement("textarea");
@@ -211,6 +228,7 @@ export function useGroceryStore() {
     items: state.items,
     interactionLog: state.interactionLog,
     weekOf: state.weekOf,
+    canUndo: !!state.previousList,
     initializeList,
     resetForNewWeek,
     toggleItem,
@@ -220,5 +238,7 @@ export function useGroceryStore() {
     getWeeklyMacros,
     exportList,
     clearLog,
+    undoAIRewrite,
+    applyAIRewrite,
   };
 }
