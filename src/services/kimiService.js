@@ -1,4 +1,5 @@
-const API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+// Proxied through Vite dev server to avoid CORS — see vite.config.js
+const API_URL = "/api/nvidia/v1/chat/completions";
 const MODEL = "moonshotai/kimi-k2.5";
 const KEY_STORAGE = "kimi-api-key";
 
