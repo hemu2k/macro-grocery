@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AddItemModal from "./AddItemModal";
+import WeeklyResetModal from "./WeeklyResetModal";
 
 const CATEGORY_BADGE = {
   Protein: "bg-green-100 text-green-700",
@@ -17,9 +18,12 @@ export default function GroceryTable({
   onAddItem,
   onGenerate,
   onExport,
+  onNewWeek,
   weekOf,
+  macroTotals,
 }) {
-  const [showModal, setShowModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [exported, setExported] = useState(false);
 
   function handleExport() {
@@ -42,12 +46,18 @@ export default function GroceryTable({
           <h2 className="text-lg font-semibold text-gray-800">Grocery List</h2>
           <p className="text-xs text-gray-400">Week of {weekDate}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={onGenerate}
             className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
           >
             Generate List
+          </button>
+          <button
+            onClick={() => setShowResetModal(true)}
+            className="px-3 py-1.5 text-sm bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors font-medium"
+          >
+            New Week
           </button>
           <button
             onClick={handleExport}
@@ -100,13 +110,21 @@ export default function GroceryTable({
                   </span>
                 </td>
                 <td className="px-4 py-2.5 text-right">
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.qty}
-                    onChange={(e) => onUpdateQty(item.id, e.target.value)}
-                    className="w-20 text-right border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    {item.learned && (
+                      <span
+                        title="Auto-set from your learned preference"
+                        className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0"
+                      />
+                    )}
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.qty}
+                      onChange={(e) => onUpdateQty(item.id, e.target.value)}
+                      className="w-20 text-right border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                    />
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-gray-400 text-xs">{item.unit}</td>
                 <td className="px-4 py-2.5 text-right text-gray-600">
@@ -147,9 +165,9 @@ export default function GroceryTable({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-gray-100 flex items-center gap-4 flex-wrap">
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => setShowAddModal(true)}
           className="flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -157,15 +175,32 @@ export default function GroceryTable({
           </svg>
           Add item
         </button>
+        <span className="text-xs text-gray-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+          Blue dot = qty learned from your history
+        </span>
       </div>
 
-      {showModal && (
+      {showAddModal && (
         <AddItemModal
           onAdd={(item) => {
             onAddItem(item);
-            setShowModal(false);
+            setShowAddModal(false);
           }}
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {showResetModal && (
+        <WeeklyResetModal
+          currentItems={items}
+          weekOf={weekOf}
+          macroTotals={macroTotals}
+          onConfirm={(shouldArchive) => {
+            onNewWeek(shouldArchive);
+            setShowResetModal(false);
+          }}
+          onClose={() => setShowResetModal(false)}
         />
       )}
     </div>

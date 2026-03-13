@@ -5,13 +5,18 @@ import {
   calculateWeeklyTotals,
   generateSmartList,
 } from "../utils/macroCalculator";
+import {
+  buildPreferenceProfile,
+  applyPreferencesToList,
+} from "../utils/preferenceEngine";
+import { saveWeekToArchive } from "../data/archiveStore";
 
 const STORAGE_KEY = "macro-grocery-v1";
 
-function getMonday() {
+function getMonday(offset = 0) {
   const d = new Date();
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + offset * 7;
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
@@ -22,7 +27,7 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {
-    // ignore parse errors
+    // ignore
   }
   return null;
 }
@@ -32,10 +37,9 @@ function saveToStorage(state) {
 }
 
 function appendLog(log, entry) {
-  return [
-    ...log,
-    { ...entry, timestamp: new Date().toISOString() },
-  ].slice(-500); // keep last 500 interactions
+  return [...log, { ...entry, timestamp: new Date().toISOString() }].slice(
+    -500
+  );
 }
 
 export function useGroceryStore() {
@@ -46,31 +50,58 @@ export function useGroceryStore() {
     return { items, interactionLog: [], weekOf: getMonday() };
   });
 
-  // Sync to localStorage whenever state changes
   useEffect(() => {
     saveToStorage(state);
   }, [state]);
 
   function initializeList() {
     setState((prev) => {
-      const items = generateSmartList(foodDatabase);
+      const baseList = generateSmartList(foodDatabase);
+      const profile = buildPreferenceProfile(prev.interactionLog);
+      const items = applyPreferencesToList(baseList, profile);
       const log = appendLog(prev.interactionLog, {
         action: "generate",
         itemId: null,
         itemName: null,
         previousValue: null,
-        newValue: "smart-list",
+        newValue: items,
       });
-      return { ...prev, items, interactionLog: log, weekOf: getMonday() };
+      return { ...prev, items, interactionLog: log };
+    });
+  }
+
+  function resetForNewWeek(shouldArchive) {
+    setState((prev) => {
+      if (shouldArchive) {
+        const totals = calculateWeeklyTotals(prev.items);
+        saveWeekToArchive(prev.items, prev.weekOf, totals);
+      }
+
+      const baseList = generateSmartList(foodDatabase);
+      const profile = buildPreferenceProfile(prev.interactionLog);
+      const items = applyPreferencesToList(baseList, profile);
+      const log = appendLog(prev.interactionLog, {
+        action: "generate",
+        itemId: null,
+        itemName: null,
+        previousValue: null,
+        newValue: items,
+      });
+
+      return {
+        ...prev,
+        items,
+        interactionLog: log,
+        weekOf: getMonday(1),
+      };
     });
   }
 
   function toggleItem(id) {
     setState((prev) => {
-      const items = prev.items.map((item) => {
-        if (item.id !== id) return item;
-        return { ...item, included: !item.included };
-      });
+      const items = prev.items.map((item) =>
+        item.id !== id ? item : { ...item, included: !item.included }
+      );
       const changed = items.find((i) => i.id === id);
       const log = appendLog(prev.interactionLog, {
         action: "toggle",
@@ -162,7 +193,6 @@ export function useGroceryStore() {
 
     const text = lines.join("\n");
     navigator.clipboard.writeText(text).catch(() => {
-      // Fallback for non-HTTPS
       const el = document.createElement("textarea");
       el.value = text;
       document.body.appendChild(el);
@@ -182,6 +212,7 @@ export function useGroceryStore() {
     interactionLog: state.interactionLog,
     weekOf: state.weekOf,
     initializeList,
+    resetForNewWeek,
     toggleItem,
     updateQty,
     addItem,
