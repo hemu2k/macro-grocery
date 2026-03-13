@@ -15,8 +15,9 @@ const ITEMS_MIN = 8;
 
 const ERROR_MESSAGES = {
   API_KEY_MISSING: "Add your NVIDIA API key in settings to use AI features.",
-  INVALID_API_KEY: "Invalid API key. Check your key in settings.",
+  INVALID_API_KEY: "Invalid API key — re-enter it via the gear icon in settings.",
   RATE_LIMITED: "Too many requests. Wait a moment and try again.",
+  TIMEOUT: "Kimi took too long (90s). Try a shorter request or try again.",
   NETWORK_ERROR: "Couldn't reach Kimi. Check your connection and try again.",
   INVALID_JSON: "Kimi returned an unexpected response. Try rephrasing your request.",
   MACRO_VIOLATION: "Kimi's suggestion dropped protein below target — rejected automatically.",
