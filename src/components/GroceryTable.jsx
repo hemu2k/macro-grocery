@@ -58,15 +58,8 @@ export default function GroceryTable({
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
-  const [exported, setExported] = useState(false);
 
   const highlights = useDiffHighlight(items, aiRewriteCount);
-
-  function handleExport() {
-    onExport();
-    setExported(true);
-    setTimeout(() => setExported(false), 2000);
-  }
 
   const weekDate = new Date(weekOf).toLocaleDateString("en-US", {
     month: "short",
@@ -96,14 +89,10 @@ export default function GroceryTable({
             New Week
           </button>
           <button
-            onClick={handleExport}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium border ${
-              exported
-                ? "bg-green-50 text-green-700 border-green-300"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-            }`}
+            onClick={onExport}
+            className="px-3 py-1.5 text-sm rounded-lg transition-colors font-medium border bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
           >
-            {exported ? "Copied!" : "Export"}
+            Export ↗
           </button>
         </div>
       </div>
